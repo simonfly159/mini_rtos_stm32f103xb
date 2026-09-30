@@ -26,9 +26,12 @@
 
 # ---- 工具链（交叉编译器前缀） ----
 # 语法：变量名 = 值。等号两侧空格随意；# 之后到行尾是注释
-CC      = arm-none-eabi-gcc      # C 编译器（同时可当汇编器、链接器的前端用）
-OBJCOPY = arm-none-eabi-objcopy  # 格式转换工具：elf → bin / hex
-SIZE    = arm-none-eabi-size     # 打印 text/data/bss 各段占用大小
+# CC      C 编译器（同时可当汇编器、链接器的前端用）
+# OBJCOPY 格式转换工具：elf → bin / hex
+# SIZE    打印 text/data/bss 各段占用大小
+CC      = arm-none-eabi-gcc
+OBJCOPY = arm-none-eabi-objcopy
+SIZE    = arm-none-eabi-size
 
 # ---- 芯片相关选项：Cortex-M3 内核、Thumb 指令集 ----
 MCU_FLAGS = -mcpu=cortex-m3 -mthumb
@@ -54,9 +57,12 @@ LDFLAGS = $(MCU_FLAGS) -T stm32f103xb.ld -nostdlib \
 #   用 = 定义的变量是"惰性展开"——值在使用时才展开，那时 TARGET 已有值。
 #   （若改用 := 立即展开，写在这种顺序下就展开成空串了，初学先记住用 = 即可）
 
-TARGET  = mini_rtos                       # 产物文件名（不含后缀）
-OBJS    = main.o startup_stm32f103xb.o    # 所有目标文件。以后新增 xxx.c，
-                                          # 记得在这里加对应的 xxx.o
+# TARGET 产物文件名（不含后缀）
+TARGET  = mini_rtos
+OBJS    = main.o startup_stm32f103xb.o
+# OBJS 是所有目标文件。以后新增 xxx.c，记得在这里加对应的 xxx.o
+# ★ 注意：变量值后面不要再写行内注释！make 会把 # 前的空格也保留进值里，
+#   导致 $(TARGET).elf 展开出中间带空格的多个单词，规则直接错乱。
 
 # =========================== 第二部分：规则区 ===========================
 
@@ -101,6 +107,12 @@ $(TARGET).elf: $(OBJS) stm32f103xb.ld
 clean:
 	rm -f $(OBJS) $(TARGET).elf $(TARGET).bin $(TARGET).hex $(TARGET).map
 
-# 把 all / clean 登记为"伪目标"：防止目录里恰好存在同名文件时，
+# 【烧录】通过 OpenOCD + ST-Link 把 elf 写入芯片并复位运行
+# program ... verify reset exit：烧写 → 校验 → 复位运行 → 退出 openocd
+flash: $(TARGET).elf
+	openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
+	        -c "program $(TARGET).elf verify reset exit"
+
+# 把 all / clean / flash 登记为"伪目标"：防止目录里恰好存在同名文件时，
 # make 误以为"目标已存在且没依赖，已是最新"而拒绝执行命令
-.PHONY: all clean
+.PHONY: all clean flash
