@@ -2,6 +2,7 @@
 
 #include "minirtos.h"
 #include "portable.h"
+#include "portmacro.h"
 #include <stddef.h>
 
 #define configIDLE_TASK_NAME "IDLE"
@@ -231,7 +232,7 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB )
 {
 	/* Ensure interrupts don't access the task lists while the lists are being
 	updated. */
-	taskENTER_CRITICAL();
+	portENTER_CRITICAL();
 	{
 		uxCurrentNumberOfTasks++;
 		if( pxCurrentTCB == NULL )
@@ -278,7 +279,7 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB )
 		prvAddTaskToReadyList( pxNewTCB );
 
 	}
-	taskEXIT_CRITICAL();
+	portEXIT_CRITICAL();
 
 	if( xSchedulerRunning != pdFALSE )
 	{
