@@ -28,7 +28,8 @@ vPortRaiseBASEPRI:
   .global vPortClearBASEPRIFromISR
   .type vPortClearBASEPRIFromISR, %function
 vPortClearBASEPRIFromISR:
-  msr basepri, #0
+  mov r0, #0
+  msr basepri, r0
   bx lr
   .size vPortClearBASEPRIFromISR, .-vPortClearBASEPRIFromISR
 
@@ -38,7 +39,8 @@ vPortClearBASEPRIFromISR:
   .type ulPortRaiseBASEPRI, %function
 ulPortRaiseBASEPRI:
   mrs r0, basepri
-  msr basepri, #0x50
+  mov r1, #0x50
+  msr basepri, r1
   dsb
   isb
   bx lr
