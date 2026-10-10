@@ -42,7 +42,8 @@ MCU_FLAGS = -mcpu=cortex-m3 -mthumb
 # -O0                      不优化，便于学习时单步对照源码
 # -g3                      带最详细的调试信息（含宏定义）
 # -ffunction/data-sections 每个函数/变量单独成段，配合 --gc-sections 删未用代码
-CFLAGS  = $(MCU_FLAGS) -Wall -O0 -g3 -ffunction-sections -fdata-sections
+CFLAGS  = $(MCU_FLAGS) -Wall -O0 -g3 -ffunction-sections -fdata-sections \
+		  -Irtos/include -Irtos/portable/GCC/ARM_CM3 -Ibsp
 
 # ---- 链接选项 ----
 # -T                指定我们的链接脚本
@@ -59,7 +60,13 @@ LDFLAGS = $(MCU_FLAGS) -T stm32f103xb.ld -nostdlib \
 
 # TARGET 产物文件名（不含后缀）
 TARGET  = mini_rtos
-OBJS    = main.o startup_stm32f103xb.o
+OBJS    = app/main.o startup_stm32f103xb.o \
+		  rtos/minitask.o \
+		  rtos/portable/GCC/ARM_CM3/port.o \
+		  rtos/portable/GCC/ARM_CM3/port_asm.o \
+		  bsp/clock.o \
+		  bsp/gpio.o
+
 # OBJS 是所有目标文件。以后新增 xxx.c，记得在这里加对应的 xxx.o
 # ★ 注意：变量值后面不要再写行内注释！make 会把 # 前的空格也保留进值里，
 #   导致 $(TARGET).elf 展开出中间带空格的多个单词，规则直接错乱。
@@ -88,6 +95,10 @@ $(TARGET).elf: $(OBJS) stm32f103xb.ld
 # 有了它，OBJS 里每加一个 .o 都不用再手写规则
 # gcc 选项：-c 只编译不链接；-o 指定输出文件名
 %.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# 大写 .S：先经 C 预处理器（可用 #define/#include），再汇编
+%.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # 【模式规则】汇编启动文件 → .o（gcc 也能直接当汇编器前端用）
