@@ -4,6 +4,7 @@
 #define MINIRTOS_H
 
 #include "portmacro.h"
+#include "list.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,12 +16,14 @@ extern "C" {
 #define portPOINTER_SIZE_TYPE uint32_t
 #define portBYTE_ALIGNMENT_MASK ( 0x0007 )
 #define configMAX_TASK_NAME_LEN                  ( 16 )
-#define configMAX_PRIORITIES                     ( 56 )
+#define configMAX_PRIORITIES                     ( 8 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)128)
 #define portPRIVILEGE_BIT ( ( UBaseType_t ) 0x00 )
 
 #define configCPU_CLOCK_HZ    ( 72000000UL )   /* ★ 必须和 main.c 实际配的频率一致 */
 #define configTICK_RATE_HZ    ( 1000UL )       /* 1ms 心跳 */
+
+#define tskIDLE_PRIORITY			( ( UBaseType_t ) 0U )
 
 #define __WEAK                                 __attribute__((weak))
 
@@ -53,7 +56,8 @@ typedef struct tskTaskControlBlock 			/* The old naming convention is used to pr
 {
 	volatile StackType_t	*pxTopOfStack;	/*< Points to the location of the last item placed on the tasks stack.  THIS MUST BE THE FIRST MEMBER OF THE TCB STRUCT. */
 
-
+	ListItem_t			xStateListItem;	/*< The list that the state list item of a task is reference from denotes the state of that task (Ready, Blocked, Suspended ). */
+	ListItem_t			xEventListItem;		/*< Used to reference a task from an event list. */
 	UBaseType_t			uxPriority;			/*< The priority of the task.  0 is the lowest priority. */
 	StackType_t			*pxStack;			/*< Points to the start of the stack. */
 	char				pcTaskName[ configMAX_TASK_NAME_LEN ];/*< Descriptive name given to the task when created.  Facilitates debugging only. */ /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
@@ -76,8 +80,6 @@ TaskHandle_t xTaskCreateStatic(	TaskFunction_t pxTaskCode,
 								StackType_t * const puxStackBuffer,
 								StaticTask_t * const pxTaskBuffer ) ;
 void vTaskStartScheduler( void ) ;
-void vTaskSwitchContextUser( TCB_t *pxSwitchTCB ) ;
-void vTaskSetFirstContextUser( TCB_t *pxFirstTCB ) ;
 
 
 #ifdef __cplusplus

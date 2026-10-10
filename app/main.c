@@ -40,7 +40,6 @@ void ledon_Task(void *argument)
     {
         LED_ON();
         delay_ms_user(500);
-        vTaskSwitchContextUser(ledoff_TaskHandle);
         portYIELD_User();
     }
 }
@@ -54,7 +53,6 @@ void ledoff_Task(void *argument)
     {
         LED_OFF();
         delay_ms_user(500);
-        vTaskSwitchContextUser(ledon_TaskHandle);
         portYIELD_User();
     }
 }
@@ -70,7 +68,7 @@ int main(void)
 								            ledoff_TaskName,
 								            ledoff_TaskStackSize,
 								            ( void * ) NULL,
-								            ( UBaseType_t ) 0x00,
+								            ( UBaseType_t ) 0x01,
 								            &ledoff_Stack[0],
 								            &ledoff_TCB ) ;
 
@@ -78,11 +76,9 @@ int main(void)
 								            ledon_TaskName,
 								            ledon_TaskStackSize,
 								            ( void * ) NULL,
-								            ( UBaseType_t ) 0x00,
+								            ( UBaseType_t ) 0x01,
 								            &ledon_Stack[0],
 								            &ledon_TCB ) ;
-
-    vTaskSetFirstContextUser(ledoff_TaskHandle);
 
     vTaskStartScheduler();
 

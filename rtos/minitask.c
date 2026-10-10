@@ -6,17 +6,61 @@
 
 #define configIDLE_TASK_NAME "IDLE"
 
+/* uxTopReadyPriority holds the priority of the highest priority ready
+state task. */
+#define taskRECORD_READY_PRIORITY( uxPriority )														\
+{																									\
+	if( ( uxPriority ) > uxTopReadyPriority )														\
+	{																								\
+		uxTopReadyPriority = ( uxPriority );														\
+	}																								\
+} /* taskRECORD_READY_PRIORITY */
+
+/*
+ * Place the task represented by pxTCB into the appropriate ready list for
+ * the task.  It is inserted at the end of the list.
+ */
+#define prvAddTaskToReadyList( pxTCB )																\
+	taskRECORD_READY_PRIORITY( ( pxTCB )->uxPriority );												\
+	vListInsertEnd( &( pxReadyTasksLists[ ( pxTCB )->uxPriority ] ), &( ( pxTCB )->xStateListItem ) )
+/*-----------------------------------------------------------*/
+
+#define taskSELECT_HIGHEST_PRIORITY_TASK()															\
+{																									\
+UBaseType_t uxTopPriority = uxTopReadyPriority;														\
+																									\
+	/* Find the highest priority queue that contains ready tasks. */								\
+	while( listLIST_IS_EMPTY( &( pxReadyTasksLists[ uxTopPriority ] ) ) )							\
+	{																								\
+		configASSERT( uxTopPriority );																\
+		--uxTopPriority;																			\
+	}																								\
+																									\
+	/* listGET_OWNER_OF_NEXT_ENTRY indexes through the list, so the tasks of						\
+	the	same priority get an equal share of the processor time. */									\
+	listGET_OWNER_OF_NEXT_ENTRY( pxCurrentTCB, &( pxReadyTasksLists[ uxTopPriority ] ) );			\
+	uxTopReadyPriority = uxTopPriority;																\
+} /* taskSELECT_HIGHEST_PRIORITY_TASK */
+/*-----------------------------------------------------------*/
+
+#define taskYIELD_IF_USING_PREEMPTION() portYIELD()
 
 
-static TaskHandle_t xIdleTaskHandle					= NULL;			/*< Holds the handle of the idle task.  The idle task is created automatically when the scheduler is started. */
+static volatile UBaseType_t uxCurrentNumberOfTasks 	= ( UBaseType_t ) 0U;
+static volatile UBaseType_t uxTopReadyPriority 		= tskIDLE_PRIORITY;
 static volatile BaseType_t xSchedulerRunning 		= pdFALSE;
+static TaskHandle_t xIdleTaskHandle					= NULL;			/*< Holds the handle of the idle task.  The idle task is created automatically when the scheduler is started. */
+
 
 /*lint -save -e956 A manual analysis and inspection has been used to determine
 which static variables must be declared volatile. */
 TCB_t * volatile pxCurrentTCB = NULL;
-TCB_t * volatile pxCurrentSwitchTCB = NULL;
-TCB_t * volatile pxCurrentFirstTCB = NULL;
 
+/* Lists for ready and blocked tasks. --------------------
+xDelayedTaskList1 and xDelayedTaskList2 could be move to function scople but
+doing so breaks some kernel aware debuggers and debuggers that rely on removing
+the static qualifier. */
+static List_t pxReadyTasksLists[ configMAX_PRIORITIES ];/*< Prioritised ready tasks. */
 
 /*
  * Called after a Task_t structure has been allocated either statically or
@@ -30,6 +74,20 @@ static void prvInitialiseNewTask( 	TaskFunction_t pxTaskCode,
 									TaskHandle_t * const pxCreatedTask,
 									TCB_t *pxNewTCB,
 									const MemoryRegion_t * const xRegions );
+
+/*
+ * Called after a new task has been created and initialised to place the task
+ * under the control of the scheduler.
+ */
+static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB );
+
+
+
+/*
+ * Utility to ready all the lists used by the scheduler.  This is called
+ * automatically upon the creation of the first task.
+ */
+static void prvInitialiseTaskLists( void );
 
 /*
  * The idle task, which as all tasks is implemented as a never ending loop.
@@ -70,22 +128,7 @@ TaskHandle_t xReturn;
         pxNewTCB->pxStack = ( StackType_t * ) puxStackBuffer;
         
         prvInitialiseNewTask( pxTaskCode, pcName, ulStackDepth, pvParameters, uxPriority, &xReturn, pxNewTCB, NULL );
-        
-
-        //暂时调试用逻辑
-        if( xSchedulerRunning == pdFALSE )
-        {
-            if( pxCurrentFirstTCB == NULL )
-            {
-                pxCurrentTCB = pxNewTCB;
-            }
-            else
-            {
-                pxCurrentTCB = pxCurrentFirstTCB;
-            } 
-        }
-        
-        
+        prvAddNewTaskToReadyList( pxNewTCB ); 
     }
     else
     {
@@ -155,6 +198,17 @@ UBaseType_t x;
 
     pxNewTCB->uxPriority = uxPriority;
 
+	vListInitialiseItem( &( pxNewTCB->xStateListItem ) );
+	vListInitialiseItem( &( pxNewTCB->xEventListItem ) );
+
+	/* Set the pxNewTCB as a link back from the ListItem_t.  This is so we can get
+	back to	the containing TCB from a generic item in a list. */
+	listSET_LIST_ITEM_OWNER( &( pxNewTCB->xStateListItem ), pxNewTCB );
+
+	/* Event lists are always in priority order. */
+	listSET_LIST_ITEM_VALUE( &( pxNewTCB->xEventListItem ), ( TickType_t ) configMAX_PRIORITIES - ( TickType_t ) uxPriority ); /*lint !e961 MISRA exception as the casts are only redundant for some ports. */
+	listSET_LIST_ITEM_OWNER( &( pxNewTCB->xEventListItem ), pxNewTCB );
+
     pxNewTCB->pxTopOfStack = pxPortInitialiseStack( pxTopOfStack, pxTaskCode, pvParameters );
 
 	if( pxCreatedTask != NULL )
@@ -172,6 +226,80 @@ UBaseType_t x;
 	( void ) xRegions;
 }
 /*-----------------------------------------------------------*/
+
+static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB )
+{
+	/* Ensure interrupts don't access the task lists while the lists are being
+	updated. */
+	taskENTER_CRITICAL();
+	{
+		uxCurrentNumberOfTasks++;
+		if( pxCurrentTCB == NULL )
+		{
+			/* There are no other tasks, or all the other tasks are in
+			the suspended state - make this the current task. */
+			pxCurrentTCB = pxNewTCB;
+
+			if( uxCurrentNumberOfTasks == ( UBaseType_t ) 1 )
+			{
+				/* This is the first task to be created so do the preliminary
+				initialisation required.  We will not recover if this call
+				fails, but we will report the failure. */
+				prvInitialiseTaskLists();
+			}
+			else
+			{
+				mtCOVERAGE_TEST_MARKER();
+			}
+		}
+		else
+		{
+			/* If the scheduler is not already running, make this task the
+			current task if it is the highest priority task to be created
+			so far. */
+			if( xSchedulerRunning == pdFALSE )
+			{
+				if( pxCurrentTCB->uxPriority <= pxNewTCB->uxPriority )
+				{
+					pxCurrentTCB = pxNewTCB;
+				}
+				else
+				{
+					mtCOVERAGE_TEST_MARKER();
+				}
+			}
+			else
+			{
+				mtCOVERAGE_TEST_MARKER();
+			}
+		}
+
+
+		prvAddTaskToReadyList( pxNewTCB );
+
+	}
+	taskEXIT_CRITICAL();
+
+	if( xSchedulerRunning != pdFALSE )
+	{
+		/* If the created task is of a higher priority than the current task
+		then it should run now. */
+		if( pxCurrentTCB->uxPriority < pxNewTCB->uxPriority )
+		{
+			taskYIELD_IF_USING_PREEMPTION();
+		}
+		else
+		{
+			mtCOVERAGE_TEST_MARKER();
+		}
+	}
+	else
+	{
+		mtCOVERAGE_TEST_MARKER();
+	}
+}
+/*-----------------------------------------------------------*/
+
 
 void vTaskStartScheduler( void )
 {
@@ -239,52 +367,34 @@ BaseType_t xReturn;
 
 void vTaskSwitchContext( void )
 {
-    pxCurrentTCB = pxCurrentSwitchTCB;
+	/* Select a new task to run using either the generic C or port
+	optimised asm code. */
+	taskSELECT_HIGHEST_PRIORITY_TASK(); /*lint !e9079 void * is used as this macro is used with timers and co-routines too.  Alignment is known to be fine as the type of the pointer stored and retrieved is the same. */
+
 }
 /*-----------------------------------------------------------*/
 
-/*暂时调试用函数*/
-void vTaskSwitchContextUser( TCB_t *pxSwitchTCB )
+
+
+
+
+
+
+
+
+
+
+static void prvInitialiseTaskLists( void )
 {
-    pxCurrentSwitchTCB = pxSwitchTCB;
+UBaseType_t uxPriority;
+
+	for( uxPriority = ( UBaseType_t ) 0U; uxPriority < ( UBaseType_t ) configMAX_PRIORITIES; uxPriority++ )
+	{
+		vListInitialise( &( pxReadyTasksLists[ uxPriority ] ) );
+	}
+
 }
 /*-----------------------------------------------------------*/
-void vTaskSetFirstContextUser( TCB_t *pxFirstTCB )
-{
-    if( xSchedulerRunning == pdFALSE )
-    {
-        pxCurrentFirstTCB = pxFirstTCB;
-        pxCurrentTCB = pxFirstTCB;        
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

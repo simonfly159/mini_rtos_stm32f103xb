@@ -120,6 +120,9 @@ BaseType_t xPortStartScheduler( void )
 	//vPortSetupTimerInterrupt();
     //先关闭测试任务切换
 
+	/* Initialise the critical nesting count ready for the first task. */
+	uxCriticalNesting = 0;
+
 	/* Start the first task. */
 	prvStartFirstTask();
 
