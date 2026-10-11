@@ -10,8 +10,6 @@
 extern "C" {
 #endif
 
-#define pdFALSE			( ( BaseType_t ) 0 )
-#define pdTRUE			( ( BaseType_t ) 1 )
 
 #define portPOINTER_SIZE_TYPE uint32_t
 #define portBYTE_ALIGNMENT_MASK ( 0x0007 )
@@ -19,6 +17,7 @@ extern "C" {
 #define configMAX_PRIORITIES                     ( 8 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)128)
 #define portPRIVILEGE_BIT ( ( UBaseType_t ) 0x00 )
+#define configINITIAL_TICK_COUNT 0
 
 #define configCPU_CLOCK_HZ    ( 72000000UL )   /* ★ 必须和 main.c 实际配的频率一致 */
 #define configTICK_RATE_HZ    ( 1000UL )       /* 1ms 心跳 */
@@ -80,6 +79,7 @@ TaskHandle_t xTaskCreateStatic(	TaskFunction_t pxTaskCode,
 								StackType_t * const puxStackBuffer,
 								StaticTask_t * const pxTaskBuffer ) ;
 void vTaskStartScheduler( void ) ;
+void vTaskDelay( const TickType_t xTicksToDelay );
 
 
 #ifdef __cplusplus

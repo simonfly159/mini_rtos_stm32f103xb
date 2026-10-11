@@ -1,5 +1,6 @@
 
 #include "minirtos.h"
+#include "minitask.h"
 
 /* Constants required to set up the initial stack. */
 #define portINITIAL_XPSR			( 0x01000000 )
@@ -117,8 +118,7 @@ BaseType_t xPortStartScheduler( void )
 
 	/* Start the timer that generates the tick ISR.  Interrupts are disabled
 	here already. */
-	//vPortSetupTimerInterrupt();
-    //先关闭测试任务切换
+	vPortSetupTimerInterrupt();
 
 	/* Initialise the critical nesting count ready for the first task. */
 	uxCriticalNesting = 0;
@@ -128,6 +128,27 @@ BaseType_t xPortStartScheduler( void )
 
 	/* Should not get here! */
 	return 0;
+}
+/*-----------------------------------------------------------*/
+
+void SysTick_Handler( void )
+{
+	/* The SysTick runs at the lowest interrupt priority, so when this interrupt
+	executes all interrupts must be unmasked.  There is therefore no need to
+	save and then restore the interrupt mask value as its value is already
+	known - therefore the slightly faster vPortRaiseBASEPRI() function is used
+	in place of portSET_INTERRUPT_MASK_FROM_ISR(). */
+	vPortRaiseBASEPRI();
+	{
+		/* Increment the RTOS tick. */
+		if( xTaskIncrementTick() != pdFALSE )
+		{
+			/* A context switch is required.  Context switching is performed in
+			the PendSV interrupt.  Pend the PendSV interrupt. */
+			portNVIC_INT_CTRL_REG = portNVIC_PENDSVSET_BIT;
+		}
+	}
+	vPortClearBASEPRIFromISR();
 }
 /*-----------------------------------------------------------*/
 

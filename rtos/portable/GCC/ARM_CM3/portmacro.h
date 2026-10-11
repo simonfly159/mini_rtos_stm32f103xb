@@ -26,7 +26,8 @@ typedef unsigned long UBaseType_t;
 typedef uint32_t TickType_t;
 #define portMAX_DELAY ( TickType_t ) 0xffffffffUL
 
-
+#define pdFALSE			( ( BaseType_t ) 0 )
+#define pdTRUE			( ( BaseType_t ) 1 )
 
 #define portNVIC_INT_CTRL_REG		( * ( ( volatile uint32_t * ) 0xe000ed04 ) )
 #define portNVIC_PENDSVSET_BIT		( 1UL << 28UL )
@@ -41,6 +42,7 @@ extern void vPortEnterCritical( void );
 extern void vPortExitCritical( void );
 extern uint32_t ulPortRaiseBASEPRI( void );
 extern void prvStartFirstTask( void );
+extern void vPortClearBASEPRIFromISR(void);
 
 #define portDISABLE_INTERRUPTS()				vPortRaiseBASEPRI()
 #define portENABLE_INTERRUPTS()					vPortSetBASEPRI( 0 )

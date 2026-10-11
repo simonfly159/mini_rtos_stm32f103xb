@@ -39,8 +39,7 @@ void ledon_Task(void *argument)
     for(;;)
     {
         LED_ON();
-        delay_ms_user(500);
-        portYIELD_User();
+        vTaskDelay(500);
     }
 }
 
@@ -52,8 +51,7 @@ void ledoff_Task(void *argument)
     for(;;)
     {
         LED_OFF();
-        delay_ms_user(500);
-        portYIELD_User();
+        vTaskDelay(500);
     }
 }
 
