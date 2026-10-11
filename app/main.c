@@ -29,6 +29,15 @@ static StaticTask_t ledoff_TCB;
 static StackType_t  ledoff_Stack[configMINIMAL_STACK_SIZE];
 uint32_t ledoff_TaskStackSize = (uint32_t)configMINIMAL_STACK_SIZE;
 
+TaskHandle_t ledset_TaskHandle;
+char ledset_TaskName[10] = "set";
+static StaticTask_t ledset_TCB;
+static StackType_t  ledset_Stack[configMINIMAL_STACK_SIZE];
+uint32_t ledset_TaskStackSize = (uint32_t)configMINIMAL_STACK_SIZE;
+
+
+uint8_t led_state_tmp = 0;
+
 
 
 void ledon_Task(void *argument)
@@ -38,8 +47,12 @@ void ledon_Task(void *argument)
 
     for(;;)
     {
-        LED_ON();
-        vTaskDelay(500);
+        if(led_state_tmp == 1)
+        {
+            LED_ON();
+        }
+
+        vTaskDelay(1);
     }
 }
 
@@ -50,7 +63,25 @@ void ledoff_Task(void *argument)
 
     for(;;)
     {
-        LED_OFF();
+        if(led_state_tmp == 0)
+        {
+            LED_OFF();
+        }
+
+        vTaskDelay(1);
+    }
+}
+
+void ledset_Task(void *argument)
+{
+    ( void ) argument;
+
+
+    for(;;)
+    {
+        led_state_tmp = 0;
+        vTaskDelay(500);
+        led_state_tmp = 1;
         vTaskDelay(500);
     }
 }
@@ -77,6 +108,14 @@ int main(void)
 								            ( UBaseType_t ) 0x01,
 								            &ledon_Stack[0],
 								            &ledon_TCB ) ;
+
+    ledset_TaskHandle =  xTaskCreateStatic(	ledset_Task,
+								            ledset_TaskName,
+								            ledset_TaskStackSize,
+								            ( void * ) NULL,
+								            ( UBaseType_t ) 0x02,
+								            &ledset_Stack[0],
+								            &ledset_TCB ) ;
 
     vTaskStartScheduler();
 
