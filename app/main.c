@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "minirtos.h"
+#include "queue.h"
 #include "clock.h"
 #include "gpio.h"
 
@@ -35,15 +36,25 @@ static StaticTask_t ledset_TCB;
 static StackType_t  ledset_Stack[configMINIMAL_STACK_SIZE];
 uint32_t ledset_TaskStackSize = (uint32_t)configMINIMAL_STACK_SIZE;
 
+TaskHandle_t ledswitch_TaskHandle;
+char ledswitch_TaskName[10] = "switch";
+static StaticTask_t ledswitch_TCB;
+static StackType_t  ledswitch_Stack[configMINIMAL_STACK_SIZE];
+uint32_t ledswitch_TaskStackSize = (uint32_t)configMINIMAL_STACK_SIZE;
+
+QueueHandle_t ledstate_QueueHandle;
+static StaticQueue_t ledstate_Queue;
+static UBaseType_t ledstate_QueueLength = ( UBaseType_t ) 1;
+uint8_t ledstate_QueueBuffer[1];
+uint8_t ledstate_QueueType = queueQUEUE_TYPE_BASE;
+
 
 uint8_t led_state_tmp = 0;
-
 
 
 void ledon_Task(void *argument)
 {
     ( void ) argument;
-
 
     for(;;)
     {
@@ -60,7 +71,6 @@ void ledoff_Task(void *argument)
 {
     ( void ) argument;
 
-
     for(;;)
     {
         if(led_state_tmp == 0)
@@ -76,13 +86,26 @@ void ledset_Task(void *argument)
 {
     ( void ) argument;
 
+    uint8_t led_switch_tmp[1];
 
     for(;;)
     {
-        led_state_tmp = 0;
+        led_switch_tmp[0] = 0;
+        xQueueGenericSend( ledstate_QueueHandle, &led_switch_tmp[0], 0, queueSEND_TO_BACK );
         vTaskDelay(500);
-        led_state_tmp = 1;
+        led_switch_tmp[0] = 1;
+        xQueueGenericSend( ledstate_QueueHandle, &led_switch_tmp[0], 0, queueSEND_TO_BACK );
         vTaskDelay(500);
+    }
+}
+
+void ledswitch_Task(void *argument)
+{
+    ( void ) argument;
+
+    for(;;)
+    {
+        xQueueReceive( ledstate_QueueHandle, &led_state_tmp, ( TickType_t ) 1000 );
     }
 }
 
@@ -116,6 +139,20 @@ int main(void)
 								            ( UBaseType_t ) 0x02,
 								            &ledset_Stack[0],
 								            &ledset_TCB ) ;
+
+    ledswitch_TaskHandle =  xTaskCreateStatic(	ledswitch_Task,
+								                ledswitch_TaskName,
+								                ledswitch_TaskStackSize,
+								                ( void * ) NULL,
+								                ( UBaseType_t ) 0x02,
+								                &ledswitch_Stack[0],
+								                &ledswitch_TCB ) ;
+
+    ledstate_QueueHandle = xQueueGenericCreateStatic( ledstate_QueueLength,
+                                                      sizeof(ledstate_QueueBuffer),
+                                                      &ledstate_QueueBuffer[0],
+                                                      &ledstate_Queue,
+                                                      ledstate_QueueType ) ;
 
     vTaskStartScheduler();
 

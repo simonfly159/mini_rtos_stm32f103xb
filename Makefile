@@ -58,6 +58,10 @@ LDFLAGS = $(MCU_FLAGS) -T stm32f103xb.ld -nostdlib \
 #   用 = 定义的变量是"惰性展开"——值在使用时才展开，那时 TARGET 已有值。
 #   （若改用 := 立即展开，写在这种顺序下就展开成空串了，初学先记住用 = 即可）
 
+# 只对 lib/memcpy.o 追加 -fno-builtin：否则 GCC 可能把 memcpy 里的逐字节
+# 拷贝循环识别成 memcpy 模式并替换成一次 memcpy 调用 → 递归调用自己 → 爆栈
+lib/memcpy.o: CFLAGS += -fno-builtin
+
 # TARGET 产物文件名（不含后缀）
 TARGET  = mini_rtos
 OBJS    = app/main.o startup_stm32f103xb.o \
@@ -66,6 +70,7 @@ OBJS    = app/main.o startup_stm32f103xb.o \
 		  rtos/queue.o \
 		  rtos/portable/GCC/ARM_CM3/port.o \
 		  rtos/portable/GCC/ARM_CM3/port_asm.o \
+		  lib/memcpy.o \
 		  bsp/clock.o \
 		  bsp/gpio.o
 
