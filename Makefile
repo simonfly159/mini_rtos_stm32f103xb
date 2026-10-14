@@ -63,6 +63,7 @@ TARGET  = mini_rtos
 OBJS    = app/main.o startup_stm32f103xb.o \
 		  rtos/minitask.o \
 		  rtos/list.o \
+		  rtos/queue.o \
 		  rtos/portable/GCC/ARM_CM3/port.o \
 		  rtos/portable/GCC/ARM_CM3/port_asm.o \
 		  bsp/clock.o \

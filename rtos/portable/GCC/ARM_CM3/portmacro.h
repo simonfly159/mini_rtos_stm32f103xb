@@ -43,6 +43,7 @@ extern void vPortExitCritical( void );
 extern uint32_t ulPortRaiseBASEPRI( void );
 extern void prvStartFirstTask( void );
 extern void vPortClearBASEPRIFromISR(void);
+extern void vPortYield(void);
 
 #define portDISABLE_INTERRUPTS()				vPortRaiseBASEPRI()
 #define portENABLE_INTERRUPTS()					vPortSetBASEPRI( 0 )
@@ -58,15 +59,7 @@ not necessary for to use this port.  They are defined so the common demo files
 #define portTASK_FUNCTION( vFunction, pvParameters ) void vFunction( void *pvParameters )
 
 /* Scheduler utilities. */
-#define portYIELD()																\
-{																				\
-	/* Set a PendSV to request a context switch. */								\
-	portNVIC_INT_CTRL_REG = portNVIC_PENDSVSET_BIT;								\
-}
-/*-----------------------------------------------------------*/
-
-
-
+#define portYIELD()								vPortYield()
 
 
 

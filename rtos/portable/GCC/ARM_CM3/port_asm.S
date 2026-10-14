@@ -122,4 +122,17 @@ PendSV_Handler:
 	nop
   .size PendSV_Handler, .-PendSV_Handler
 
+  .section .text.vPortYield
+  .global vPortYield
+  .type vPortYield, %function
+vPortYield:
+  ldr r0, =0xE000ED04
+  mov r1, #(1 << 28)
+  str r1, [r0]
+  dsb
+  isb
+  bx lr
+  .size vPortYield, .-vPortYield
+
+
 

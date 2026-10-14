@@ -3,9 +3,9 @@
 #include "minirtos.h"
 #include "portable.h"
 #include "portmacro.h"
+#include "minitask.h"
 #include <stddef.h>
 
-#define configIDLE_TASK_NAME "IDLE"
 
 /* uxTopReadyPriority holds the priority of the highest priority ready
 state task. */
@@ -61,7 +61,6 @@ count overflows. */
 }
 /*-----------------------------------------------------------*/
 
-#define taskYIELD_IF_USING_PREEMPTION() portYIELD()
 
 
 static volatile UBaseType_t uxCurrentNumberOfTasks 	= ( UBaseType_t ) 0U;
@@ -558,7 +557,30 @@ void vTaskDelay( const TickType_t xTicksToDelay )
 		mtCOVERAGE_TEST_MARKER();
 	}
 
+    /*此处必定会进行任务切换，因为已经将当前任务从ready链表中删除加入到延时链表中，
+    所以必定要进行一次切换将cpu交给ready的任务。*/
     taskYIELD_IF_USING_PREEMPTION();
+}
+/*-----------------------------------------------------------*/
+
+/*由于minirtos不计划编写suspend功能，但freertos中在xTaskResumeAll函数中会判断
+是否需要任务切换，这里自己编写了一个仅拥有判断是否需要切换的函数。虽然不使用该函
+数直接调用Yield也可以正常运行，但判断一下可以减少一次自己切换自己的情况。该函数
+的调用可以看自己的情况自行决定。*/
+BaseType_t vTaskCheckYield( void )
+{
+BaseType_t xAlreadyYielded = pdFALSE;
+    
+    if( uxTopReadyPriority >= pxCurrentTCB->uxPriority)
+    {
+        xAlreadyYielded = pdTRUE;
+    }
+    else
+    {
+        mtCOVERAGE_TEST_MARKER();
+    }
+
+    return xAlreadyYielded;
 }
 /*-----------------------------------------------------------*/
 
@@ -658,6 +680,152 @@ const TickType_t xConstTickCount = xTickCount;
 	( void ) xCanBlockIndefinitely;
 }
 /*-----------------------------------------------------------*/
+
+BaseType_t xTaskRemoveFromEventList( const List_t * const pxEventList )
+{
+TCB_t *pxUnblockedTCB;
+BaseType_t xReturn;
+
+	/* THIS FUNCTION MUST BE CALLED FROM A CRITICAL SECTION.  It can also be
+	called from a critical section within an ISR. */
+
+	/* The event list is sorted in priority order, so the first in the list can
+	be removed as it is known to be the highest priority.  Remove the TCB from
+	the delayed list, and add it to the ready list.
+
+	If an event is for a queue that is locked then this function will never
+	get called - the lock count on the queue will get modified instead.  This
+	means exclusive access to the event list is guaranteed here.
+
+	This function assumes that a check has already been made to ensure that
+	pxEventList is not empty. */
+	pxUnblockedTCB = listGET_OWNER_OF_HEAD_ENTRY( pxEventList ); /*lint !e9079 void * is used as this macro is used with timers and co-routines too.  Alignment is known to be fine as the type of the pointer stored and retrieved is the same. */
+	configASSERT( pxUnblockedTCB );
+	( void ) uxListRemove( &( pxUnblockedTCB->xEventListItem ) );
+	( void ) uxListRemove( &( pxUnblockedTCB->xStateListItem ) );
+	prvAddTaskToReadyList( pxUnblockedTCB );
+
+	if( pxUnblockedTCB->uxPriority > pxCurrentTCB->uxPriority )
+	{
+		/* Return true if the task removed from the event list has a higher
+		priority than the calling task.  This allows the calling task to know if
+		it should force a context switch now. */
+		xReturn = pdTRUE;
+	}
+	else
+	{
+		xReturn = pdFALSE;
+	}
+
+	return xReturn;
+}
+/*-----------------------------------------------------------*/
+
+void vTaskInternalSetTimeOutState( TimeOut_t * const pxTimeOut )
+{
+	/* For internal use only as it does not use a critical section. */
+	pxTimeOut->xOverflowCount = xNumOfOverflows;
+	pxTimeOut->xTimeOnEntering = xTickCount;
+}
+/*-----------------------------------------------------------*/
+
+BaseType_t xTaskCheckForTimeOut( TimeOut_t * const pxTimeOut, TickType_t * const pxTicksToWait )
+{
+BaseType_t xReturn;
+
+	configASSERT( pxTimeOut );
+	configASSERT( pxTicksToWait );
+
+	vPortEnterCritical();
+	{
+		/* Minor optimisation.  The tick count cannot change in this block. */
+		const TickType_t xConstTickCount = xTickCount;
+		const TickType_t xElapsedTime = xConstTickCount - pxTimeOut->xTimeOnEntering;
+
+		if( ( xNumOfOverflows != pxTimeOut->xOverflowCount ) && ( xConstTickCount >= pxTimeOut->xTimeOnEntering ) ) /*lint !e525 Indentation preferred as is to make code within pre-processor directives clearer. */
+		{
+			/* The tick count is greater than the time at which
+			vTaskSetTimeout() was called, but has also overflowed since
+			vTaskSetTimeOut() was called.  It must have wrapped all the way
+			around and gone past again. This passed since vTaskSetTimeout()
+			was called. */
+			xReturn = pdTRUE;
+		}
+		else if( xElapsedTime < *pxTicksToWait ) /*lint !e961 Explicit casting is only redundant with some compilers, whereas others require it to prevent integer conversion errors. */
+		{
+			/* Not a genuine timeout. Adjust parameters for time remaining. */
+			*pxTicksToWait -= xElapsedTime;
+			vTaskInternalSetTimeOutState( pxTimeOut );
+			xReturn = pdFALSE;
+		}
+		else
+		{
+			*pxTicksToWait = 0;
+			xReturn = pdTRUE;
+		}
+	}
+	vPortExitCritical();
+
+	return xReturn;
+}
+/*-----------------------------------------------------------*/
+
+void vTaskPlaceOnEventList( List_t * const pxEventList, const TickType_t xTicksToWait )
+{
+	configASSERT( pxEventList );
+
+	/* THIS FUNCTION MUST BE CALLED WITH EITHER INTERRUPTS DISABLED OR THE
+	SCHEDULER SUSPENDED AND THE QUEUE BEING ACCESSED LOCKED. */
+
+	/* Place the event list item of the TCB in the appropriate event list.
+	This is placed in the list in priority order so the highest priority task
+	is the first to be woken by the event.  The queue that contains the event
+	list is locked, preventing simultaneous access from interrupts. */
+	vListInsert( pxEventList, &( pxCurrentTCB->xEventListItem ) );
+
+	prvAddCurrentTaskToDelayedList( xTicksToWait, pdTRUE );
+}
+/*-----------------------------------------------------------*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*
   vApplicationGetIdleTaskMemory gets called when configSUPPORT_STATIC_ALLOCATION
