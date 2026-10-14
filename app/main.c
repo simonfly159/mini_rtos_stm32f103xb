@@ -49,7 +49,7 @@ uint8_t ledstate_QueueBuffer[1];
 uint8_t ledstate_QueueType = queueQUEUE_TYPE_BASE;
 
 
-uint8_t led_state_tmp = 0;
+volatile uint8_t led_state_tmp = 0;
 
 
 void ledon_Task(void *argument)
@@ -149,7 +149,7 @@ int main(void)
 								                &ledswitch_TCB ) ;
 
     ledstate_QueueHandle = xQueueGenericCreateStatic( ledstate_QueueLength,
-                                                      sizeof(ledstate_QueueBuffer),
+                                                      sizeof(ledstate_QueueBuffer[0]),
                                                       &ledstate_QueueBuffer[0],
                                                       &ledstate_Queue,
                                                       ledstate_QueueType ) ;
