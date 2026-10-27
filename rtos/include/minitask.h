@@ -30,6 +30,10 @@ BaseType_t xTaskRemoveFromEventList( const List_t * const pxEventList );
 void vTaskInternalSetTimeOutState( TimeOut_t * const pxTimeOut );
 BaseType_t xTaskCheckForTimeOut( TimeOut_t * const pxTimeOut, TickType_t * const pxTicksToWait );
 void vTaskPlaceOnEventList( List_t * const pxEventList, const TickType_t xTicksToWait );
+BaseType_t xTaskPriorityInherit( TaskHandle_t const pxMutexHolder );
+BaseType_t xTaskPriorityDisinherit( TaskHandle_t const pxMutexHolder );
+void vTaskPriorityDisinheritAfterTimeout( TaskHandle_t const pxMutexHolder, UBaseType_t uxHighestPriorityWaitingTask );
+TaskHandle_t pvTaskIncrementMutexHeldCount( void );
 
 
 #ifdef __cplusplus

@@ -61,7 +61,8 @@ typedef struct tskTaskControlBlock 			/* The old naming convention is used to pr
 	StackType_t			*pxStack;			/*< Points to the start of the stack. */
 	char				pcTaskName[ configMAX_TASK_NAME_LEN ];/*< Descriptive name given to the task when created.  Facilitates debugging only. */ /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
 
-
+	UBaseType_t		    uxBasePriority;		/*< The priority last assigned to the task - used by the priority inheritance mechanism. */
+	UBaseType_t		    uxMutexesHeld;
 
 } TCB_t;
 

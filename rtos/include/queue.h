@@ -2,6 +2,7 @@
 #define QUEUE_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include "list.h"
 #include "portmacro.h"
 #include "minirtos.h"
@@ -31,6 +32,18 @@ extern "C" {
 #define queueYIELD_IF_USING_PREEMPTION() portYIELD()
 
 
+/* When the Queue_t structure is used to represent a base queue its pcHead and
+pcTail members are used as pointers into the queue storage area.  When the
+Queue_t structure is used to represent a mutex pcHead and pcTail pointers are
+not necessary, and the pcHead pointer is set to NULL to indicate that the
+structure instead holds a pointer to the mutex holder (if any).  Map alternative
+names to the pcHead and structure member to ensure the readability of the code
+is maintained.  The QueuePointers_t and SemaphoreData_t types are used to form
+a union as their usage is mutually exclusive dependent on what the queue is
+being used for. */
+#define uxQueueType						pcHead
+#define queueQUEUE_IS_MUTEX				NULL
+
 typedef struct QueuePointers
 {
 	int8_t *pcTail;					/*< Points to the byte at the end of the queue storage area.  Once more byte is allocated than necessary to store the queue items, this is used as a marker. */
@@ -42,6 +55,10 @@ typedef struct SemaphoreData
 	TaskHandle_t xMutexHolder;		 /*< The handle of the task that holds the mutex. */
 	UBaseType_t uxRecursiveCallCount;/*< Maintains a count of the number of times a recursive mutex has been recursively 'taken' when the structure is used as a mutex. */
 } SemaphoreData_t;
+
+#define queueSEMAPHORE_QUEUE_ITEM_LENGTH ( ( UBaseType_t ) 0 )
+#define semSEMAPHORE_QUEUE_ITEM_LENGTH		( ( uint8_t ) 0U )
+#define semGIVE_BLOCK_TIME					( ( TickType_t ) 0U )
 
 /*
  * Definition of the queue used by the scheduler.
@@ -78,12 +95,28 @@ typedef struct QueueDefinition 		/* The old naming convention is used to prevent
 
 typedef Queue_t StaticQueue_t;
 typedef struct QueueDefinition * QueueHandle_t;
+typedef QueueHandle_t  SemaphoreHandle_t;
+typedef StaticQueue_t  StaticSemaphore_t;
+typedef QueueHandle_t  MutexHandle_t;
+typedef StaticQueue_t  StaticMutex_t;
 
+
+
+
+#define xSemaphoreCreateCountingStatic( uxMaxCount, uxInitialCount, pxSemaphoreBuffer ) xQueueCreateCountingSemaphoreStatic( ( uxMaxCount ), ( uxInitialCount ), ( pxSemaphoreBuffer ) )
+#define xSemaphoreCreateBinaryStatic( pxStaticSemaphore )                               xQueueGenericCreateStatic( ( UBaseType_t ) 1, semSEMAPHORE_QUEUE_ITEM_LENGTH, NULL, pxStaticSemaphore, queueQUEUE_TYPE_BINARY_SEMAPHORE )
+#define xSemaphoreTake( xSemaphore, xBlockTime )		                                xQueueSemaphoreTake( ( xSemaphore ), ( xBlockTime ) )
+#define xSemaphoreGive( xSemaphore )		                                            xQueueGenericSend( ( QueueHandle_t ) ( xSemaphore ), NULL, semGIVE_BLOCK_TIME, queueSEND_TO_BACK )
+#define xMutexCreateStatic( xMutex )                                                     xQueueCreateMutexStatic( ( queueQUEUE_TYPE_MUTEX ), (xMutex) )
+#define xMutexTake( xMutex, xBlockTime )	                                            xSemaphoreTake( xMutex, xBlockTime )	
+#define xMutexGive( xMutex )                                                            xSemaphoreGive( xMutex )
 
 QueueHandle_t xQueueGenericCreateStatic( const UBaseType_t uxQueueLength, const UBaseType_t uxItemSize, uint8_t *pucQueueStorage, StaticQueue_t *pxStaticQueue, const uint8_t ucQueueType );
 BaseType_t xQueueGenericSend( QueueHandle_t xQueue, const void * const pvItemToQueue, TickType_t xTicksToWait, const BaseType_t xCopyPosition );
 BaseType_t xQueueReceive( QueueHandle_t xQueue, void * const pvBuffer, TickType_t xTicksToWait );
-
+QueueHandle_t xQueueCreateCountingSemaphoreStatic( const UBaseType_t uxMaxCount, const UBaseType_t uxInitialCount, StaticQueue_t *pxStaticQueue );
+BaseType_t xQueueSemaphoreTake( QueueHandle_t xQueue, TickType_t xTicksToWait );
+QueueHandle_t xQueueCreateMutexStatic( const uint8_t ucQueueType, StaticQueue_t *pxStaticQueue );
 
 #ifdef __cplusplus
 }
