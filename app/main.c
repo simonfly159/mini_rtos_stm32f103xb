@@ -79,13 +79,9 @@ void ledon_Task(void *argument)
         // }
 
         // vTaskDelay(1);
-        if( xSemaphoreTake(ledon_SemaphoreHandle, 1000) == pdTRUE )
+        if( xSemaphoreTake(ledon_SemaphoreHandle, 500) == pdTRUE )
         {
-            if( xMutexTake(led_MutexHandle, 3000) == pdTRUE )
-            {
                 LED_ON();
-                xMutexGive(led_MutexHandle);
-            }
         }
     }
 }
@@ -102,13 +98,9 @@ void ledoff_Task(void *argument)
         // }
 
         // vTaskDelay(1);
-        if( xSemaphoreTake(ledoff_SemaphoreHandle, 1000) == pdTRUE )
+        if( xSemaphoreTake(ledoff_SemaphoreHandle, 500) == pdTRUE )
         {
-            if( xMutexTake(led_MutexHandle, 3000) == pdTRUE )
-            {
                 LED_OFF();
-                xMutexGive(led_MutexHandle);
-            }
         }
     }
 }
@@ -140,16 +132,22 @@ void ledswitch_Task(void *argument)
     {
         xQueueReceive( ledstate_QueueHandle, &led_switch_tmp[0], ( TickType_t ) 1000 );
 
-        if(led_switch_tmp[0] == 0)
+        if( xMutexTake(led_MutexHandle, 0) == pdTRUE )
         {
-            xSemaphoreGive(ledoff_SemaphoreHandle);
+            if(led_switch_tmp[0] == 0)
+            {
+                xSemaphoreGive(ledoff_SemaphoreHandle);
+            }
+            else if(led_switch_tmp[0] == 1)
+            {
+                xSemaphoreGive(ledon_SemaphoreHandle);
+            }
+            else
+            {} 
+
+            xMutexGive(led_MutexHandle);
         }
-        else if(led_switch_tmp[0] == 1)
-        {
-            xSemaphoreGive(ledon_SemaphoreHandle);
-        }
-        else
-        {}
+        
     }
 }
 
