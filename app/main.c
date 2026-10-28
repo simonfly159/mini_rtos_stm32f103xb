@@ -132,7 +132,7 @@ void ledswitch_Task(void *argument)
     {
         xQueueReceive( ledstate_QueueHandle, &led_switch_tmp[0], ( TickType_t ) 1000 );
 
-        if( xMutexTake(led_MutexHandle, 0) == pdTRUE )
+        if( xMutexTake(led_MutexHandle, 250) == pdTRUE )
         {
             if(led_switch_tmp[0] == 0)
             {
